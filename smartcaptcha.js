@@ -220,10 +220,10 @@
 
   async function verifyWithBackend(features) {
     const payload = buildVerifyPayload(features);
-    const res = await fetch(VERIFY_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    const res = await fetch("https://captcha-2-fix9.onrender.com/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
     });
 
     if (!res.ok) {

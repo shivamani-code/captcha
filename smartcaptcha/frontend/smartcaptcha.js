@@ -3,8 +3,6 @@
   const statusEl = document.getElementById('smartcaptcha-status');
   const resetBtn = document.getElementById('smartcaptcha-reset');
 
-  const VERIFY_ENDPOINT = 'https://captcha-2-fix9.onrender.com/verify';
-
   const PAGE_LOADED_AT_MS = nowMs();
 
   const FEATURE_COLUMNS = [
@@ -163,10 +161,10 @@
   async function verifyWithBackend(features) {
     const payload = buildVerifyPayload(features);
     console.debug('[SmartCAPTCHA] verify payload', payload);
-    const res = await fetch(VERIFY_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    const res = await fetch("https://captcha-2-fix9.onrender.com/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
     });
 
     if (!res.ok) {
