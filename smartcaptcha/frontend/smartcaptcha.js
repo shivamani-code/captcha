@@ -5,17 +5,14 @@
 
   const VERIFY_ENDPOINT = 'https://captcha-1-eqpj.onrender.com/verify';
 
+  const PAGE_LOADED_AT_MS = nowMs();
+
   const FEATURE_COLUMNS = [
     'avg_mouse_speed',
     'mouse_path_entropy',
     'click_delay',
     'task_completion_time',
     'idle_time',
-    'micro_jitter_variance',
-    'acceleration_curve',
-    'curvature_variance',
-    'overshoot_correction_ratio',
-    'timing_entropy',
   ];
 
   function setStatus(text) {
@@ -75,6 +72,11 @@
     return safeDivide(hBits, max);
   }
 
+  function clampFinite(n, min, max) {
+    if (!Number.isFinite(n)) return min;
+    return clamp(n, min, max);
+  }
+
   function buildVerifyPayload(features) {
     const payload = {};
     for (const key of FEATURE_COLUMNS) {
@@ -92,21 +94,22 @@
     }
 
     const click_delay = safeDivide(
-      (session.interaction_started_at_ms ?? 0) - (session.widget_shown_at_ms ?? 0),
+      (session.interaction_started_at_ms ?? 0) - (session.page_loaded_at_ms ?? 0),
       1000
     );
+
     const task_completion_time = safeDivide(
-      (session.interaction_ended_at_ms ?? 0) - (session.interaction_started_at_ms ?? 0),
+      (session.interaction_completed_at_ms ?? session.interaction_ended_at_ms ?? 0) - (session.interaction_started_at_ms ?? 0),
       1000
     );
 
     let totalDistance = 0;
-    let totalTime = 0;
+    let activeMoveTimeMs = 0;
+    let idle_time_ms = 0;
 
-    const segmentSpeeds = [];
-    const segmentDt = [];
-    const dxList = [];
-    const dyList = [];
+    const idleMicroPauseIgnoreMs = 50;
+    const movementNoisePx = 0.5;
+
     const angles = [];
 
     for (let i = 1; i < moveEvents.length; i++) {
@@ -119,26 +122,20 @@
       const dy = b.y - a.y;
       const dist = Math.hypot(dx, dy);
 
-      totalDistance += dist;
-      totalTime += dtMs;
-
-      const speed = dist / (dtMs / 1000);
-      segmentSpeeds.push(speed);
-      segmentDt.push(dtMs);
-      dxList.push(dx);
-      dyList.push(dy);
-
-      angles.push(Math.atan2(dy, dx));
+      if (dist > movementNoisePx) {
+        totalDistance += dist;
+        activeMoveTimeMs += dtMs;
+        angles.push(Math.atan2(dy, dx));
+      } else {
+        if (dtMs >= idleMicroPauseIgnoreMs) idle_time_ms += dtMs;
+      }
     }
 
-    const avg_mouse_speed = safeDivide(totalDistance, totalTime / 1000);
-
-    const idleGapThresholdMs = 120;
-    let idle_time_ms = 0;
-    for (let i = 1; i < moveEvents.length; i++) {
-      const dtMs = moveEvents[i].t_ms - moveEvents[i - 1].t_ms;
-      if (dtMs > idleGapThresholdMs) idle_time_ms += dtMs;
+    if (activeMoveTimeMs <= 0 || totalDistance <= 0 || angles.length < 2) {
+      return null;
     }
+
+    const avg_mouse_speed = safeDivide(totalDistance, activeMoveTimeMs / 1000);
     const idle_time = idle_time_ms / 1000;
 
     const directionBins = 12;
@@ -152,67 +149,12 @@
     const directionProbs = directionCounts.map((c) => safeDivide(c, directionTotal));
     const mouse_path_entropy = normalizeEntropyBits(shannonEntropy(directionProbs), directionBins);
 
-    const micro_jitter_variance = variance(dxList) + variance(dyList);
-
-    const accelerationsAbs = [];
-    for (let i = 1; i < segmentSpeeds.length; i++) {
-      const dv = segmentSpeeds[i] - segmentSpeeds[i - 1];
-      const dtS = (segmentDt[i] ?? 0) / 1000;
-      if (!Number.isFinite(dtS) || dtS <= 0) continue;
-      accelerationsAbs.push(Math.abs(dv / dtS));
-    }
-    const acceleration_curve = mean(accelerationsAbs);
-
-    const curvatures = [];
-    for (let i = 1; i < angles.length; i++) {
-      const da = angles[i] - angles[i - 1];
-      const wrapped = Math.atan2(Math.sin(da), Math.cos(da));
-      const segLen = Math.hypot(dxList[i] ?? 0, dyList[i] ?? 0);
-      if (segLen <= 0) continue;
-      curvatures.push(Math.abs(wrapped) / segLen);
-    }
-    const curvature_variance = variance(curvatures);
-
-    let forward = 0;
-    let backward = 0;
-    for (const dx of dxList) {
-      if (dx >= 0) forward += dx;
-      else backward += Math.abs(dx);
-    }
-    const overshoot_correction_ratio = safeDivide(backward, forward);
-
-    const timingBins = 10;
-    const timingCounts = new Array(timingBins).fill(0);
-    const dtValues = [];
-    for (const dtMs of segmentDt) {
-      if (Number.isFinite(dtMs) && dtMs > 0) dtValues.push(dtMs);
-    }
-    let timing_entropy = 0;
-    if (dtValues.length) {
-      const minDt = Math.min(...dtValues);
-      const maxDt = Math.max(...dtValues);
-      const range = maxDt - minDt;
-      for (const dtMs of dtValues) {
-        const normalized = range > 0 ? (dtMs - minDt) / range : 0;
-        const idx = Math.min(timingBins - 1, Math.max(0, Math.floor(normalized * timingBins)));
-        timingCounts[idx] += 1;
-      }
-      const timingTotal = timingCounts.reduce((s, c) => s + c, 0);
-      const timingProbs = timingCounts.map((c) => safeDivide(c, timingTotal));
-      timing_entropy = normalizeEntropyBits(shannonEntropy(timingProbs), timingBins);
-    }
-
     const featureVector = {
-      avg_mouse_speed,
-      mouse_path_entropy,
-      click_delay,
-      task_completion_time,
-      idle_time,
-      micro_jitter_variance,
-      acceleration_curve,
-      curvature_variance,
-      overshoot_correction_ratio,
-      timing_entropy,
+      avg_mouse_speed: clampFinite(avg_mouse_speed, 0, 10000),
+      mouse_path_entropy: clampFinite(mouse_path_entropy, 0, 1),
+      click_delay: clampFinite(click_delay, 0.001, 60),
+      task_completion_time: clampFinite(task_completion_time, 0.001, 60),
+      idle_time: clampFinite(idle_time, 0, 60),
     };
 
     return featureVector;
@@ -220,6 +162,7 @@
 
   async function verifyWithBackend(features) {
     const payload = buildVerifyPayload(features);
+    console.debug('[SmartCAPTCHA] verify payload', payload);
     const res = await fetch(VERIFY_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -266,9 +209,11 @@
     root.appendChild(widget);
 
     const session = {
+      page_loaded_at_ms: PAGE_LOADED_AT_MS,
       widget_shown_at_ms: nowMs(),
       interaction_started_at_ms: null,
       interaction_ended_at_ms: null,
+      interaction_completed_at_ms: null,
       events: [],
     };
 
@@ -289,6 +234,7 @@
 
     function recordEvent(evtType, evt) {
       const p = toLocalPoint(evt);
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
       session.events.push({
         type: evtType,
         t_ms: nowMs(),
@@ -378,7 +324,8 @@
     function endDrag(evt) {
       if (!state.dragging) return;
 
-      session.interaction_ended_at_ms = nowMs();
+      const endTs = nowMs();
+      session.interaction_ended_at_ms = endTs;
       if (evt) {
         recordEvent('up', evt);
       }
@@ -388,6 +335,7 @@
       track.classList.remove('sc-track--active');
 
       if (isComplete()) {
+        session.interaction_completed_at_ms = endTs;
         state.verified = true;
         handle.disabled = true;
         widget.classList.add('sc-widget--verified');
@@ -402,7 +350,7 @@
         setStatus('Verifying...');
         verifyWithBackend(features)
           .then((result) => {
-            if (result.status === 'human') {
+            if (result && (result.decision === 'human' || result.decision === 'suspicious') && result.is_human === true) {
               setStatus('Verified: Human');
               window.location.assign('https://example.com');
             } else {

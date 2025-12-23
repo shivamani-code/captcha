@@ -1,16 +1,21 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 import time
 from dataclasses import dataclass
+from math import isfinite
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 from model import load_model, predict_human_probability
+
+
+logger = logging.getLogger("smartcaptcha")
 
 
 app = FastAPI(title="SmartCAPTCHA")
@@ -35,17 +40,22 @@ class VerifyRequest(BaseModel):
     click_delay: float = Field(...)
     task_completion_time: float = Field(...)
     idle_time: float = Field(...)
-    micro_jitter_variance: float = Field(...)
-    acceleration_curve: float = Field(...)
-    curvature_variance: float = Field(...)
-    overshoot_correction_ratio: float = Field(...)
-    timing_entropy: float = Field(...)
+
+    @validator("avg_mouse_speed", "mouse_path_entropy", "click_delay", "task_completion_time", "idle_time")
+    def _finite_number(cls, v: float):
+        try:
+            fv = float(v)
+        except Exception as e:
+            raise ValueError("value must be a number") from e
+        if not isfinite(fv):
+            raise ValueError("value must be finite")
+        return fv
 
 
 class VerifyResponse(BaseModel):
-    status: str
+    is_human: bool
+    decision: str
     confidence: float
-    token: str
 
 
 class ValidateTokenRequest(BaseModel):
@@ -116,23 +126,34 @@ def verify(payload: VerifyRequest):
         )
 
     features = payload.model_dump()
+
+    logger.info("/verify features received: %s", {
+        "avg_mouse_speed": features.get("avg_mouse_speed"),
+        "mouse_path_entropy": features.get("mouse_path_entropy"),
+        "click_delay": features.get("click_delay"),
+        "task_completion_time": features.get("task_completion_time"),
+        "idle_time": features.get("idle_time"),
+    })
+
     prob_human = predict_human_probability(MODEL_PAYLOAD, features)
 
-    if prob_human >= 0.85:
-        status = "human"
-    elif prob_human >= 0.50:
-        status = "suspicious"
+    if not isfinite(prob_human):
+        raise HTTPException(status_code=500, detail="Model returned non-finite confidence")
+
+    if prob_human >= 0.60:
+        decision = "human"
+        is_human = True
+    elif prob_human >= 0.40:
+        decision = "suspicious"
+        is_human = True
     else:
-        status = "bot"
+        decision = "bot"
+        is_human = False
 
     now_s = time.time()
     cleanup_tokens(now_s)
 
-    token = ""
-    if status == "human":
-        token = issue_token(now_s)
-
-    return VerifyResponse(status=status, confidence=float(prob_human), token=token)
+    return VerifyResponse(is_human=is_human, decision=decision, confidence=float(prob_human))
 
 
 @app.post("/validate", response_model=ValidateTokenResponse)
