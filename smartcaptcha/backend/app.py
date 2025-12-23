@@ -15,6 +15,11 @@ from model import load_model, predict_human_probability
 
 app = FastAPI(title="SmartCAPTCHA")
 
+
+@app.get("/")
+def health_check():
+    return {"status": "SmartCAPTCHA backend running"}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["null"],
