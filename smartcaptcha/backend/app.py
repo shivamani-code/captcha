@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .model import load_model, predict_human_probability
+from model import load_model, predict_human_probability
 
 
 app = FastAPI(title="SmartCAPTCHA")
