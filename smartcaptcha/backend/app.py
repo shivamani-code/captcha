@@ -18,20 +18,21 @@ from model import load_model, predict_human_probability
 logger = logging.getLogger("smartcaptcha")
 
 
-app = FastAPI(title="SmartCAPTCHA")
+logging.basicConfig(level=logging.INFO)
+
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
 @app.get("/")
-def health_check():
-    return {"status": "SmartCAPTCHA backend running"}
+def root():
+    return {"status": "backend alive"}
 
 
 class VerifyRequest(BaseModel):
@@ -55,7 +56,7 @@ class VerifyRequest(BaseModel):
 class VerifyResponse(BaseModel):
     decision: str
     confidence: float
-    human_like: bool
+    human_sanity: bool
 
 
 class ValidateTokenRequest(BaseModel):
@@ -108,8 +109,10 @@ def _startup() -> None:
     global MODEL_PAYLOAD
     try:
         MODEL_PAYLOAD = load_model()
+        logger.info("Model loaded successfully")
     except Exception:
         MODEL_PAYLOAD = None
+        logger.exception("Model failed to load; continuing without model")
 
 
 @app.get("/health")
@@ -119,54 +122,50 @@ def health():
 
 @app.post("/verify", response_model=VerifyResponse)
 def verify(payload: VerifyRequest):
-    if MODEL_PAYLOAD is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Model not loaded. Train the model and restart the API service.",
-        )
-
     features = payload.model_dump()
 
-    logger.info("/verify features received: %s", {
-        "avg_mouse_speed": features.get("avg_mouse_speed"),
-        "mouse_path_entropy": features.get("mouse_path_entropy"),
-        "click_delay": features.get("click_delay"),
-        "task_completion_time": features.get("task_completion_time"),
-        "idle_time": features.get("idle_time"),
-    })
+    confidence = 0.0
+    if MODEL_PAYLOAD is not None:
+        try:
+            confidence = float(predict_human_probability(MODEL_PAYLOAD, features))
+        except Exception:
+            confidence = 0.0
+            logger.exception("Model prediction failed; defaulting confidence to 0")
 
-    prob_human = predict_human_probability(MODEL_PAYLOAD, features)
+    if not isfinite(confidence):
+        confidence = 0.0
 
-    if not isfinite(prob_human):
-        raise HTTPException(status_code=500, detail="Model returned non-finite confidence")
-
-    human_like = (
-        features.get("avg_mouse_speed", 0.0) > 0.2
-        and features.get("mouse_path_entropy", 0.0) > 0.15
-        and features.get("click_delay", 0.0) > 0.3
-        and features.get("task_completion_time", 0.0) > 1.0
-        and features.get("idle_time", 0.0) >= 0.0
+    human_sanity = (
+        features.get("avg_mouse_speed", 0.0) > 0.15
+        and features.get("mouse_path_entropy", 0.0) > 0.10
+        and features.get("click_delay", 0.0) > 0.2
+        and features.get("task_completion_time", 0.0) > 0.8
     )
 
-    if human_like:
+    if human_sanity:
         decision = "human"
-    elif prob_human >= 0.60:
+    elif confidence >= 0.5:
         decision = "human"
-    elif prob_human >= 0.40:
-        decision = "suspicious"
     else:
         decision = "bot"
 
     now_s = time.time()
     cleanup_tokens(now_s)
 
-    logger.info("/verify decision: %s", {
-        "confidence": float(prob_human),
-        "human_like": bool(human_like),
+    logger.info("/verify: %s", {
+        "features": {
+            "avg_mouse_speed": features.get("avg_mouse_speed"),
+            "mouse_path_entropy": features.get("mouse_path_entropy"),
+            "click_delay": features.get("click_delay"),
+            "task_completion_time": features.get("task_completion_time"),
+            "idle_time": features.get("idle_time"),
+        },
+        "confidence": float(confidence),
+        "human_sanity": bool(human_sanity),
         "decision": decision,
     })
 
-    return VerifyResponse(decision=decision, confidence=float(prob_human), human_like=bool(human_like))
+    return VerifyResponse(decision=decision, confidence=float(confidence), human_sanity=bool(human_sanity))
 
 
 @app.post("/validate", response_model=ValidateTokenResponse)
