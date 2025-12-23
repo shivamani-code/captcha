@@ -15,19 +15,18 @@ from model import load_model, predict_human_probability
 
 app = FastAPI(title="SmartCAPTCHA")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.get("/")
 def health_check():
     return {"status": "SmartCAPTCHA backend running"}
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["null"],
-    allow_origin_regex=r"^http://(localhost|127\\.0\\.0\\.1)(:\\d+)?$",
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
-)
 
 
 class VerifyRequest(BaseModel):
