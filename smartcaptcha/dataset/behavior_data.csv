@@ -1,0 +1,5 @@
+avg_mouse_speed,mouse_path_entropy,click_delay,task_completion_time,idle_time,micro_jitter_variance,acceleration_curve,curvature_variance,overshoot_correction_ratio,timing_entropy,label
+0.9,0.7,0.6,2.8,0.3,0.4,1.1,0.2,0.08,0.65,1
+1.1,0.6,0.4,3.2,0.2,0.6,1.6,0.3,0.12,0.58,1
+2.4,0.05,0.02,0.4,0.0,0.0,0.05,0.0,0.0,0.02,0
+2.1,0.08,0.03,0.6,0.0,0.01,0.08,0.01,0.01,0.06,0

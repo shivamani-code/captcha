@@ -1,0 +1,160 @@
+:root {
+  --bg: #0b1220;
+  --panel: #111b2e;
+  --text: #e8eefc;
+  --muted: #a9b6d6;
+  --border: rgba(232, 238, 252, 0.14);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  background: radial-gradient(1200px 700px at 20% 10%, #162447 0%, var(--bg) 55%);
+  color: var(--text);
+}
+
+.page {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 48px 20px;
+}
+
+.title {
+  margin: 0 0 18px;
+  font-size: 28px;
+  letter-spacing: 0.2px;
+}
+
+.subtitle {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.captcha-root {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(17, 27, 46, 0.7);
+  padding: 18px;
+}
+
+.sc-widget {
+  width: 100%;
+}
+
+.sc-label {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.sc-track {
+  position: relative;
+  height: 52px;
+  border-radius: 999px;
+  background: rgba(232, 238, 252, 0.06);
+  border: 1px solid rgba(232, 238, 252, 0.12);
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.sc-track--active {
+  border-color: rgba(232, 238, 252, 0.22);
+}
+
+.sc-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, rgba(73, 145, 255, 0.55), rgba(73, 255, 196, 0.35));
+}
+
+.sc-fill--animate {
+  transition: width 200ms ease;
+}
+
+.sc-handle {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 238, 252, 0.22);
+  background: rgba(232, 238, 252, 0.10);
+  color: var(--text);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.sc-handle:focus-visible {
+  outline: 2px solid rgba(73, 145, 255, 0.9);
+  outline-offset: 3px;
+}
+
+.sc-handle--active {
+  cursor: grabbing;
+  background: rgba(232, 238, 252, 0.14);
+}
+
+.sc-handle--animate {
+  transition: transform 200ms ease;
+}
+
+.sc-widget--verified .sc-fill {
+  background: linear-gradient(90deg, rgba(84, 255, 181, 0.55), rgba(73, 145, 255, 0.35));
+}
+
+.sc-widget--verified .sc-handle {
+  cursor: default;
+  background: rgba(84, 255, 181, 0.10);
+  border-color: rgba(84, 255, 181, 0.35);
+}
+
+.result {
+  margin-top: 14px;
+}
+
+.actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid rgba(232, 238, 252, 0.18);
+  background: rgba(232, 238, 252, 0.08);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn:hover {
+  background: rgba(232, 238, 252, 0.12);
+}
+
+.btn:focus-visible {
+  outline: 2px solid rgba(73, 145, 255, 0.9);
+  outline-offset: 3px;
+}
+
+.status {
+  min-height: 22px;
+  color: var(--muted);
+}
