@@ -3,7 +3,7 @@
   const statusEl = document.getElementById('smartcaptcha-status');
   const resetBtn = document.getElementById('smartcaptcha-reset');
 
-  const VERIFY_ENDPOINT = 'https://captcha-1-eqpj.onrender.com/verify';
+  const VERIFY_ENDPOINT = 'https://captcha-2-fix9.onrender.com/verify';
 
   const PAGE_LOADED_AT_MS = nowMs();
 

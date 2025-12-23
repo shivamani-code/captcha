@@ -1,6 +1,6 @@
 # SmartCAPTCHA
 
-Local development project for SmartCAPTCHA.
+SmartCAPTCHA.
 
 ## Project Structure
 
@@ -49,7 +49,7 @@ uvicorn app:app --reload --port 8000
 
 Health check:
 
-`GET http://127.0.0.1:8000/health`
+`GET https://captcha-2-fix9.onrender.com/`
 
 ### 5) Run the frontend demo
 
